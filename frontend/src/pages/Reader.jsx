@@ -23,7 +23,7 @@ export default function Reader() {
 
   const contentRef = useRef()
   const mainRef = useRef()
-  const utterancesRef = useRef([])
+  const keepAliveRef = useRef(null)
 
   useEffect(() => {
     gsap.fromTo(mainRef.current, { opacity: 0 }, { opacity: 1, duration: 0.8 })
@@ -87,76 +87,60 @@ export default function Reader() {
     return () => clearInterval(t)
   }, [saveProgress])
 
-  // Mobile-friendly TTS: split text into chunks to prevent auto-stop
+  const cleanText = (t) => t
+    .replace(/[*_#`~>]/g, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/[-—]{2,}/g, '')
+    .replace(/,/g, '，')
+    .replace(/\./g, '。')
+    .replace(/\n+/g, '，')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+
   const speak = (text) => {
+    window.speechSynthesis.cancel()
+    if (keepAliveRef.current) { clearInterval(keepAliveRef.current); keepAliveRef.current = null }
+
     if (isSpeaking) {
-      window.speechSynthesis.cancel()
-      utterancesRef.current = []
-      if (keepAliveRef.current) clearInterval(keepAliveRef.current)
       setIsSpeaking(false)
       return
     }
 
-    // Strip markdown and clean text
-    const clean = text
-      .replace(/[*_#`~>]/g, '')
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-      .replace(/[-—]{2,}/g, '')
-      .replace(/\n+/g, '。')
-      .replace(/,\s*,/g, '，')
-      .replace(/\s{2,}/g, ' ')
-      .trim()
+    const clean = cleanText(text).slice(0, 500)
+    if (!clean) return
 
-    // Split into chunks of ~80 chars at sentence boundaries
-    const chunks = []
-    let remaining = clean
-    while (remaining.length > 0) {
-      let end = Math.min(remaining.length, 80)
-      if (end < remaining.length) {
-        let lastPunct = -1
-        for (let i = end - 1; i >= 10; i--) {
-          if ('。，、；：！？.!?'.includes(remaining[i])) { lastPunct = i; break }
-        }
-        if (lastPunct > 0) end = lastPunct + 1
-      }
-      chunks.push(remaining.slice(0, end))
-      remaining = remaining.slice(end)
-    }
-
-    utterancesRef.current = chunks
-    setIsSpeaking(true)
-
-    // Chrome mobile workaround: periodic resume() to prevent auto-pause
-    keepAliveRef.current = setInterval(() => {
-      if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
-        window.speechSynthesis.pause()
-        window.speechSynthesis.resume()
-      }
-    }, 5000)
-
-    speakNextChunk()
-  }
-
-  const keepAliveRef = useRef(null)
-
-  const speakNextChunk = () => {
-    if (utterancesRef.current.length === 0) {
-      if (keepAliveRef.current) clearInterval(keepAliveRef.current)
-      setIsSpeaking(false)
-      return
-    }
-    const chunk = utterancesRef.current.shift()
-    const utterance = new SpeechSynthesisUtterance(chunk)
+    const utterance = new SpeechSynthesisUtterance(clean)
     utterance.lang = 'zh-CN'
     utterance.rate = 0.85
     utterance.pitch = 0.9
-    utterance.onend = () => speakNextChunk()
-    utterance.onerror = () => {
-      utterancesRef.current = []
-      if (keepAliveRef.current) clearInterval(keepAliveRef.current)
+
+    // Try to pick a Chinese voice explicitly
+    const voices = window.speechSynthesis.getVoices()
+    const zhVoice = voices.find(v => v.lang.startsWith('zh'))
+    if (zhVoice) utterance.voice = zhVoice
+
+    utterance.onend = () => {
+      if (keepAliveRef.current) { clearInterval(keepAliveRef.current); keepAliveRef.current = null }
       setIsSpeaking(false)
     }
+    utterance.onerror = () => {
+      if (keepAliveRef.current) { clearInterval(keepAliveRef.current); keepAliveRef.current = null }
+      setIsSpeaking(false)
+    }
+
+    setIsSpeaking(true)
     window.speechSynthesis.speak(utterance)
+
+    // Keep alive for Chrome mobile
+    keepAliveRef.current = setInterval(() => {
+      if (!window.speechSynthesis.speaking) {
+        clearInterval(keepAliveRef.current)
+        keepAliveRef.current = null
+        setIsSpeaking(false)
+      } else if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume()
+      }
+    }, 3000)
   }
 
   const getSelected = () => {
