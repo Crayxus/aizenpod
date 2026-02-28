@@ -24,6 +24,15 @@ export default function Reader() {
   const contentRef = useRef()
   const mainRef = useRef()
   const keepAliveRef = useRef(null)
+  const voicesRef = useRef([])
+
+  // Pre-load voices (critical for mobile — getVoices() returns [] until voiceschanged fires)
+  useEffect(() => {
+    const loadVoices = () => { voicesRef.current = window.speechSynthesis.getVoices() }
+    loadVoices()
+    window.speechSynthesis.addEventListener('voiceschanged', loadVoices)
+    return () => window.speechSynthesis.removeEventListener('voiceschanged', loadVoices)
+  }, [])
 
   useEffect(() => {
     gsap.fromTo(mainRef.current, { opacity: 0 }, { opacity: 1, duration: 0.8 })
@@ -109,38 +118,57 @@ export default function Reader() {
     const clean = cleanText(text).slice(0, 500)
     if (!clean) return
 
-    const utterance = new SpeechSynthesisUtterance(clean)
-    utterance.lang = 'zh-CN'
-    utterance.rate = 0.85
-    utterance.pitch = 0.9
+    const doSpeak = () => {
+      const utterance = new SpeechSynthesisUtterance(clean)
+      utterance.lang = 'zh-CN'
+      utterance.rate = 0.85
+      utterance.pitch = 0.9
 
-    // Try to pick a Chinese voice explicitly
-    const voices = window.speechSynthesis.getVoices()
-    const zhVoice = voices.find(v => v.lang.startsWith('zh'))
-    if (zhVoice) utterance.voice = zhVoice
+      // Use pre-loaded voices (mobile needs voiceschanged event first)
+      const voices = voicesRef.current.length ? voicesRef.current : window.speechSynthesis.getVoices()
+      const zhVoice = voices.find(v => v.lang.startsWith('zh'))
+      if (zhVoice) utterance.voice = zhVoice
 
-    utterance.onend = () => {
-      if (keepAliveRef.current) { clearInterval(keepAliveRef.current); keepAliveRef.current = null }
-      setIsSpeaking(false)
-    }
-    utterance.onerror = () => {
-      if (keepAliveRef.current) { clearInterval(keepAliveRef.current); keepAliveRef.current = null }
-      setIsSpeaking(false)
-    }
-
-    setIsSpeaking(true)
-    window.speechSynthesis.speak(utterance)
-
-    // Keep alive for Chrome mobile
-    keepAliveRef.current = setInterval(() => {
-      if (!window.speechSynthesis.speaking) {
-        clearInterval(keepAliveRef.current)
-        keepAliveRef.current = null
+      utterance.onend = () => {
+        if (keepAliveRef.current) { clearInterval(keepAliveRef.current); keepAliveRef.current = null }
         setIsSpeaking(false)
-      } else if (window.speechSynthesis.paused) {
-        window.speechSynthesis.resume()
       }
-    }, 3000)
+      utterance.onerror = () => {
+        if (keepAliveRef.current) { clearInterval(keepAliveRef.current); keepAliveRef.current = null }
+        setIsSpeaking(false)
+      }
+
+      setIsSpeaking(true)
+      window.speechSynthesis.speak(utterance)
+
+      // Keep alive for Chrome mobile (prevents auto-pause)
+      keepAliveRef.current = setInterval(() => {
+        if (!window.speechSynthesis.speaking) {
+          clearInterval(keepAliveRef.current)
+          keepAliveRef.current = null
+          setIsSpeaking(false)
+        } else if (window.speechSynthesis.paused) {
+          window.speechSynthesis.resume()
+        }
+      }, 3000)
+    }
+
+    // On mobile, voices may not be loaded yet — wait briefly if empty
+    if (voicesRef.current.length === 0) {
+      const onVoices = () => {
+        voicesRef.current = window.speechSynthesis.getVoices()
+        window.speechSynthesis.removeEventListener('voiceschanged', onVoices)
+        doSpeak()
+      }
+      window.speechSynthesis.addEventListener('voiceschanged', onVoices)
+      // Fallback: if voiceschanged never fires, speak anyway after 300ms
+      setTimeout(() => {
+        window.speechSynthesis.removeEventListener('voiceschanged', onVoices)
+        if (!window.speechSynthesis.speaking) doSpeak()
+      }, 300)
+    } else {
+      doSpeak()
+    }
   }
 
   const getSelected = () => {

@@ -13,6 +13,17 @@ export default function AIPanel({ text, mode, onClose }) {
   const panelRef = useRef()
   const progressRef = useRef()
 
+  const keepAliveRef = useRef(null)
+  const voicesRef = useRef([])
+
+  // Pre-load voices for mobile
+  useEffect(() => {
+    const loadVoices = () => { voicesRef.current = window.speechSynthesis.getVoices() }
+    loadVoices()
+    window.speechSynthesis.addEventListener('voiceschanged', loadVoices)
+    return () => window.speechSynthesis.removeEventListener('voiceschanged', loadVoices)
+  }, [])
+
   useEffect(() => {
     gsap.fromTo(panelRef.current,
       { x: 60, opacity: 0 },
@@ -47,8 +58,6 @@ export default function AIPanel({ text, mode, onClose }) {
     setLoading(false)
   }
 
-  const keepAliveRef = useRef(null)
-
   const cleanText = (t) => t
     .replace(/[*_#`~>]/g, '')
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
@@ -72,36 +81,54 @@ export default function AIPanel({ text, mode, onClose }) {
     const clean = cleanText(answer).slice(0, 500)
     if (!clean) return
 
-    const utterance = new SpeechSynthesisUtterance(clean)
-    utterance.lang = 'zh-CN'
-    utterance.rate = 0.85
-    utterance.pitch = 0.9
+    const doSpeak = () => {
+      const utterance = new SpeechSynthesisUtterance(clean)
+      utterance.lang = 'zh-CN'
+      utterance.rate = 0.85
+      utterance.pitch = 0.9
 
-    const voices = window.speechSynthesis.getVoices()
-    const zhVoice = voices.find(v => v.lang.startsWith('zh'))
-    if (zhVoice) utterance.voice = zhVoice
+      const voices = voicesRef.current.length ? voicesRef.current : window.speechSynthesis.getVoices()
+      const zhVoice = voices.find(v => v.lang.startsWith('zh'))
+      if (zhVoice) utterance.voice = zhVoice
 
-    utterance.onend = () => {
-      if (keepAliveRef.current) { clearInterval(keepAliveRef.current); keepAliveRef.current = null }
-      setIsSpeaking(false)
-    }
-    utterance.onerror = () => {
-      if (keepAliveRef.current) { clearInterval(keepAliveRef.current); keepAliveRef.current = null }
-      setIsSpeaking(false)
-    }
-
-    setIsSpeaking(true)
-    window.speechSynthesis.speak(utterance)
-
-    keepAliveRef.current = setInterval(() => {
-      if (!window.speechSynthesis.speaking) {
-        clearInterval(keepAliveRef.current)
-        keepAliveRef.current = null
+      utterance.onend = () => {
+        if (keepAliveRef.current) { clearInterval(keepAliveRef.current); keepAliveRef.current = null }
         setIsSpeaking(false)
-      } else if (window.speechSynthesis.paused) {
-        window.speechSynthesis.resume()
       }
-    }, 3000)
+      utterance.onerror = () => {
+        if (keepAliveRef.current) { clearInterval(keepAliveRef.current); keepAliveRef.current = null }
+        setIsSpeaking(false)
+      }
+
+      setIsSpeaking(true)
+      window.speechSynthesis.speak(utterance)
+
+      keepAliveRef.current = setInterval(() => {
+        if (!window.speechSynthesis.speaking) {
+          clearInterval(keepAliveRef.current)
+          keepAliveRef.current = null
+          setIsSpeaking(false)
+        } else if (window.speechSynthesis.paused) {
+          window.speechSynthesis.resume()
+        }
+      }, 3000)
+    }
+
+    // On mobile, voices may not be loaded yet
+    if (voicesRef.current.length === 0) {
+      const onVoices = () => {
+        voicesRef.current = window.speechSynthesis.getVoices()
+        window.speechSynthesis.removeEventListener('voiceschanged', onVoices)
+        doSpeak()
+      }
+      window.speechSynthesis.addEventListener('voiceschanged', onVoices)
+      setTimeout(() => {
+        window.speechSynthesis.removeEventListener('voiceschanged', onVoices)
+        if (!window.speechSynthesis.speaking) doSpeak()
+      }, 300)
+    } else {
+      doSpeak()
+    }
   }
 
   const close = () => {
