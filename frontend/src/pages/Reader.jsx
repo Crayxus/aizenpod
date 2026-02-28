@@ -92,23 +92,30 @@ export default function Reader() {
     if (isSpeaking) {
       window.speechSynthesis.cancel()
       utterancesRef.current = []
+      if (keepAliveRef.current) clearInterval(keepAliveRef.current)
       setIsSpeaking(false)
       return
     }
 
-    // Split into chunks of ~100 chars at sentence boundaries
+    // Strip markdown and clean text
+    const clean = text
+      .replace(/[*_#`~>]/g, '')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/[-—]{2,}/g, '')
+      .replace(/\n+/g, '。')
+      .replace(/,\s*,/g, '，')
+      .replace(/\s{2,}/g, ' ')
+      .trim()
+
+    // Split into chunks of ~80 chars at sentence boundaries
     const chunks = []
-    const raw = text.replace(/\n+/g, '。')
-    let remaining = raw
+    let remaining = clean
     while (remaining.length > 0) {
-      let end = Math.min(remaining.length, 100)
-      // Try to break at sentence boundary
-      const punct = remaining.slice(0, end).search(/[。，、；：！？\n]/g)
-      if (punct > 10) {
-        // Find last punctuation within the chunk
+      let end = Math.min(remaining.length, 80)
+      if (end < remaining.length) {
         let lastPunct = -1
         for (let i = end - 1; i >= 10; i--) {
-          if ('。，、；：！？'.includes(remaining[i])) { lastPunct = i; break }
+          if ('。，、；：！？.!?'.includes(remaining[i])) { lastPunct = i; break }
         }
         if (lastPunct > 0) end = lastPunct + 1
       }
@@ -118,11 +125,23 @@ export default function Reader() {
 
     utterancesRef.current = chunks
     setIsSpeaking(true)
+
+    // Chrome mobile workaround: periodic resume() to prevent auto-pause
+    keepAliveRef.current = setInterval(() => {
+      if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
+        window.speechSynthesis.pause()
+        window.speechSynthesis.resume()
+      }
+    }, 5000)
+
     speakNextChunk()
   }
 
+  const keepAliveRef = useRef(null)
+
   const speakNextChunk = () => {
     if (utterancesRef.current.length === 0) {
+      if (keepAliveRef.current) clearInterval(keepAliveRef.current)
       setIsSpeaking(false)
       return
     }
@@ -132,10 +151,11 @@ export default function Reader() {
     utterance.rate = 0.85
     utterance.pitch = 0.9
     utterance.onend = () => speakNextChunk()
-    utterance.onerror = () => { utterancesRef.current = []; setIsSpeaking(false) }
-
-    // Mobile workaround: keep synthesis alive
-    window.speechSynthesis.cancel()
+    utterance.onerror = () => {
+      utterancesRef.current = []
+      if (keepAliveRef.current) clearInterval(keepAliveRef.current)
+      setIsSpeaking(false)
+    }
     window.speechSynthesis.speak(utterance)
   }
 

@@ -47,25 +47,82 @@ export default function AIPanel({ text, mode, onClose }) {
     setLoading(false)
   }
 
+  const chunksRef = useRef([])
+  const keepAliveRef = useRef(null)
+
+  const cleanMarkdown = (text) => text
+    .replace(/[*_#`~>]/g, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/[-—]{2,}/g, '')
+    .replace(/\n+/g, '。')
+    .replace(/,\s*,/g, '，')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+
   const speakAnswer = () => {
     if (isSpeaking) {
       window.speechSynthesis.cancel()
+      chunksRef.current = []
+      if (keepAliveRef.current) clearInterval(keepAliveRef.current)
       setIsSpeaking(false)
       return
     }
     if (!answer) return
-    const utterance = new SpeechSynthesisUtterance(answer)
+
+    const clean = cleanMarkdown(answer)
+    // Split into chunks
+    const chunks = []
+    let remaining = clean
+    while (remaining.length > 0) {
+      let end = Math.min(remaining.length, 80)
+      if (end < remaining.length) {
+        let lastPunct = -1
+        for (let i = end - 1; i >= 10; i--) {
+          if ('。，、；：！？.!?'.includes(remaining[i])) { lastPunct = i; break }
+        }
+        if (lastPunct > 0) end = lastPunct + 1
+      }
+      chunks.push(remaining.slice(0, end))
+      remaining = remaining.slice(end)
+    }
+
+    chunksRef.current = chunks
+    setIsSpeaking(true)
+
+    keepAliveRef.current = setInterval(() => {
+      if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
+        window.speechSynthesis.pause()
+        window.speechSynthesis.resume()
+      }
+    }, 5000)
+
+    speakNext()
+  }
+
+  const speakNext = () => {
+    if (chunksRef.current.length === 0) {
+      if (keepAliveRef.current) clearInterval(keepAliveRef.current)
+      setIsSpeaking(false)
+      return
+    }
+    const chunk = chunksRef.current.shift()
+    const utterance = new SpeechSynthesisUtterance(chunk)
     utterance.lang = 'zh-CN'
     utterance.rate = 0.85
     utterance.pitch = 0.9
-    utterance.onend = () => setIsSpeaking(false)
-    utterance.onerror = () => setIsSpeaking(false)
-    setIsSpeaking(true)
+    utterance.onend = () => speakNext()
+    utterance.onerror = () => {
+      chunksRef.current = []
+      if (keepAliveRef.current) clearInterval(keepAliveRef.current)
+      setIsSpeaking(false)
+    }
     window.speechSynthesis.speak(utterance)
   }
 
   const close = () => {
     window.speechSynthesis.cancel()
+    chunksRef.current = []
+    if (keepAliveRef.current) clearInterval(keepAliveRef.current)
     gsap.to(panelRef.current, { x: 60, opacity: 0, duration: 0.3, onComplete: onClose })
   }
 
