@@ -16,12 +16,14 @@ export default function Reader() {
   const [scriptures, setScriptures] = useState([])
   const [selected, setSelected] = useState(null)
   const [chapter, setChapter] = useState(null)
-  const [aiPanel, setAiPanel] = useState(null) // { text, mode: 'explain'|'ask' }
+  const [aiPanel, setAiPanel] = useState(null)
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [lastProgress, setLastProgress] = useState(null)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const contentRef = useRef()
   const mainRef = useRef()
+  const utterancesRef = useRef([])
 
   useEffect(() => {
     gsap.fromTo(mainRef.current, { opacity: 0 }, { opacity: 1, duration: 0.8 })
@@ -30,8 +32,13 @@ export default function Reader() {
   }, [])
 
   const loadScriptures = async () => {
-    const { data } = await axios.get(`${API}/scriptures/`)
-    setScriptures(data)
+    try {
+      const { data } = await axios.get(`${API}/scriptures/`)
+      setScriptures(Array.isArray(data) ? data : [])
+    } catch (err) {
+      console.error('Failed to load scriptures:', err)
+      setScriptures([])
+    }
   }
 
   const loadProgress = async () => {
@@ -42,19 +49,24 @@ export default function Reader() {
   }
 
   const openScripture = async (id) => {
-    const { data } = await axios.get(`${API}/scriptures/${id}`)
-    setSelected(data)
-    if (data.chapters.length > 0) {
-      const prog = lastProgress?.scripture_id === id ? lastProgress : null
-      const ch = prog ? data.chapters.find(c => c.id === prog.chapter_id) || data.chapters[0] : data.chapters[0]
-      setChapter(ch)
-      gsap.fromTo(contentRef.current, { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.5 })
-      if (prog?.scroll_position) {
-        setTimeout(() => {
-          if (contentRef.current)
-            contentRef.current.scrollTop = contentRef.current.scrollHeight * prog.scroll_position
-        }, 100)
+    try {
+      const { data } = await axios.get(`${API}/scriptures/${id}`)
+      setSelected(data)
+      setSidebarOpen(false)
+      if (data.chapters && data.chapters.length > 0) {
+        const prog = lastProgress?.scripture_id === id ? lastProgress : null
+        const ch = prog ? data.chapters.find(c => c.id === prog.chapter_id) || data.chapters[0] : data.chapters[0]
+        setChapter(ch)
+        gsap.fromTo(contentRef.current, { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.5 })
+        if (prog?.scroll_position) {
+          setTimeout(() => {
+            if (contentRef.current)
+              contentRef.current.scrollTop = contentRef.current.scrollHeight * prog.scroll_position
+          }, 100)
+        }
       }
+    } catch (err) {
+      console.error('Failed to open scripture:', err)
     }
   }
 
@@ -75,19 +87,55 @@ export default function Reader() {
     return () => clearInterval(t)
   }, [saveProgress])
 
+  // Mobile-friendly TTS: split text into chunks to prevent auto-stop
   const speak = (text) => {
     if (isSpeaking) {
       window.speechSynthesis.cancel()
+      utterancesRef.current = []
       setIsSpeaking(false)
       return
     }
-    const utterance = new SpeechSynthesisUtterance(text.slice(0, 500))
+
+    // Split into chunks of ~100 chars at sentence boundaries
+    const chunks = []
+    const raw = text.replace(/\n+/g, '。')
+    let remaining = raw
+    while (remaining.length > 0) {
+      let end = Math.min(remaining.length, 100)
+      // Try to break at sentence boundary
+      const punct = remaining.slice(0, end).search(/[。，、；：！？\n]/g)
+      if (punct > 10) {
+        // Find last punctuation within the chunk
+        let lastPunct = -1
+        for (let i = end - 1; i >= 10; i--) {
+          if ('。，、；：！？'.includes(remaining[i])) { lastPunct = i; break }
+        }
+        if (lastPunct > 0) end = lastPunct + 1
+      }
+      chunks.push(remaining.slice(0, end))
+      remaining = remaining.slice(end)
+    }
+
+    utterancesRef.current = chunks
+    setIsSpeaking(true)
+    speakNextChunk()
+  }
+
+  const speakNextChunk = () => {
+    if (utterancesRef.current.length === 0) {
+      setIsSpeaking(false)
+      return
+    }
+    const chunk = utterancesRef.current.shift()
+    const utterance = new SpeechSynthesisUtterance(chunk)
     utterance.lang = 'zh-CN'
     utterance.rate = 0.85
     utterance.pitch = 0.9
-    utterance.onend = () => setIsSpeaking(false)
-    utterance.onerror = () => setIsSpeaking(false)
-    setIsSpeaking(true)
+    utterance.onend = () => speakNextChunk()
+    utterance.onerror = () => { utterancesRef.current = []; setIsSpeaking(false) }
+
+    // Mobile workaround: keep synthesis alive
+    window.speechSynthesis.cancel()
     window.speechSynthesis.speak(utterance)
   }
 
@@ -96,11 +144,24 @@ export default function Reader() {
     return sel || (chapter?.content?.slice(0, 120) || '')
   }
 
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
+
   return (
     <div ref={mainRef} style={styles.layout}>
 
-      {/* 侧栏：经文列表 */}
-      <aside style={styles.sidebar}>
+      {/* Mobile hamburger */}
+      {isMobile && (
+        <button style={styles.hamburger} onClick={() => setSidebarOpen(!sidebarOpen)}>
+          {sidebarOpen ? '✕' : '☰'}
+        </button>
+      )}
+
+      {/* Sidebar */}
+      <aside style={{
+        ...styles.sidebar,
+        ...(isMobile ? styles.sidebarMobile : {}),
+        ...(isMobile && !sidebarOpen ? styles.sidebarHidden : {})
+      }}>
         <div style={styles.sideHeader}>
           <span style={styles.sideTitle}>大藏经</span>
         </div>
@@ -119,25 +180,31 @@ export default function Reader() {
         ))}
       </aside>
 
-      {/* 主内容 */}
+      {/* Overlay for mobile sidebar */}
+      {isMobile && sidebarOpen && (
+        <div style={styles.overlay} onClick={() => setSidebarOpen(false)} />
+      )}
+
+      {/* Main content */}
       <main style={styles.main}>
-        {/* 顶栏 */}
-        <div style={styles.topbar}>
-          <span style={styles.topBrand}>禅境 · ZenPod</span>
-          <div style={styles.topActions}>
+        {/* Top bar */}
+        <div style={{ ...styles.topbar, ...(isMobile ? styles.topbarMobile : {}) }}>
+          <span style={styles.topBrand}>禅境</span>
+          <div style={{ ...styles.topActions, ...(isMobile ? styles.topActionsMobile : {}) }}>
             {chapter && (
               <>
-                <button style={styles.iconBtn} onClick={() => speak(chapter.content)}
-                  title={isSpeaking ? '停止朗读' : '朗读经文'}>
-                  {isSpeaking ? '⏸' : '▶'} {isSpeaking ? '朗读中' : '朗读'}
+                <button style={{ ...styles.iconBtn, ...(isMobile ? styles.iconBtnMobile : {}) }}
+                  onClick={() => speak(chapter.content)}>
+                  {isSpeaking ? '⏸' : '▶'}
+                  {!isMobile && (isSpeaking ? ' 朗读中' : ' 朗读')}
                 </button>
-                <button style={styles.iconBtn}
+                <button style={{ ...styles.iconBtn, ...(isMobile ? styles.iconBtnMobile : {}) }}
                   onClick={() => setAiPanel({ text: getSelected(), mode: 'explain' })}>
-                  ✦ 解释
+                  ✦{!isMobile && ' 解释'}
                 </button>
-                <button style={styles.iconBtn}
+                <button style={{ ...styles.iconBtn, ...(isMobile ? styles.iconBtnMobile : {}) }}
                   onClick={() => setAiPanel({ text: getSelected(), mode: 'ask' })}>
-                  ？ 提问
+                  ？{!isMobile && ' 提问'}
                 </button>
               </>
             )}
@@ -145,22 +212,30 @@ export default function Reader() {
           <Timer sessionId={sessionId} onExpire={() => nav('/')} />
         </div>
 
-        {/* 经文内容 */}
-        <div ref={contentRef} style={styles.content}>
+        {/* Scripture content */}
+        <div ref={contentRef} style={{ ...styles.content, ...(isMobile ? styles.contentMobile : {}) }}>
           {!selected && (
             <div style={styles.placeholder}>
               <div style={styles.placeholderIcon}>☸</div>
-              <p style={styles.placeholderText}>请从左侧选择经文</p>
+              <p style={styles.placeholderText}>
+                {isMobile ? '点击左上角 ☰ 选择经文' : '请从左侧选择经文'}
+              </p>
               <p style={styles.placeholderSub}>选中文字可获得 AI 解释</p>
             </div>
           )}
           {selected && chapter && (
             <>
-              <h1 style={styles.scriptureTitle}>{selected.title}</h1>
+              <h1 style={{ ...styles.scriptureTitle, ...(isMobile ? styles.scriptureTitleMobile : {}) }}>
+                {selected.title}
+              </h1>
               <h2 style={styles.chapterTitle}>{chapter.title}</h2>
               <div style={styles.body}>
                 {chapter.content.split('\n\n').map((para, i) => (
-                  <p key={i} style={styles.para}
+                  <p key={i} style={{ ...styles.para, ...(isMobile ? styles.paraMobile : {}) }}
+                    onTouchEnd={() => {
+                      const sel = window.getSelection()?.toString().trim()
+                      if (sel && sel.length > 4) setAiPanel({ text: sel, mode: 'explain' })
+                    }}
                     onMouseUp={() => {
                       const sel = window.getSelection()?.toString().trim()
                       if (sel && sel.length > 4) setAiPanel({ text: sel, mode: 'explain' })
@@ -185,7 +260,7 @@ export default function Reader() {
         </div>
       </main>
 
-      {/* AI 面板 */}
+      {/* AI Panel */}
       {aiPanel && (
         <AIPanel text={aiPanel.text} mode={aiPanel.mode}
           onClose={() => setAiPanel(null)} />
@@ -195,8 +270,12 @@ export default function Reader() {
 }
 
 const styles = {
-  layout: { display: 'flex', height: '100vh', background: '#050508', overflow: 'hidden' },
-  sidebar: { width: '220px', borderRight: '1px solid #c9a84c1a', overflowY: 'auto', flexShrink: 0 },
+  layout: { display: 'flex', height: '100vh', background: '#050508', overflow: 'hidden', position: 'relative' },
+
+  // Sidebar
+  sidebar: { width: '220px', borderRight: '1px solid #c9a84c1a', overflowY: 'auto', flexShrink: 0, background: '#050508', zIndex: 50 },
+  sidebarMobile: { position: 'fixed', left: 0, top: 0, bottom: 0, width: '260px', transition: 'transform 0.3s ease', boxShadow: '4px 0 20px #00000088' },
+  sidebarHidden: { transform: 'translateX(-100%)' },
   sideHeader: { padding: '20px 16px 12px', borderBottom: '1px solid #c9a84c1a' },
   sideTitle: { color: '#c9a84c', fontSize: '13px', letterSpacing: '0.3em' },
   continueHint: {
@@ -214,14 +293,32 @@ const styles = {
   sideItemActive: { background: '#c9a84c0f', borderLeft: '2px solid #c9a84c' },
   sideCategory: { fontSize: '10px', color: '#5a5040', letterSpacing: '0.15em' },
   sideItemTitle: { fontSize: '14px', color: '#d4c090', letterSpacing: '0.05em' },
+
+  // Hamburger
+  hamburger: {
+    position: 'fixed', top: '10px', left: '10px', zIndex: 60,
+    background: '#0a0a14', border: '1px solid #c9a84c44',
+    borderRadius: '4px', color: '#c9a84c', fontSize: '20px',
+    width: '36px', height: '36px', cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  },
+
+  // Overlay
+  overlay: {
+    position: 'fixed', inset: 0, background: '#00000066', zIndex: 40,
+  },
+
+  // Main
   main: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
   topbar: {
     display: 'flex', alignItems: 'center', gap: '12px',
     padding: '12px 24px', borderBottom: '1px solid #c9a84c1a',
     background: '#0a0a14',
   },
+  topbarMobile: { padding: '10px 12px 10px 50px', gap: '6px' },
   topBrand: { fontSize: '13px', color: '#c9a84c', letterSpacing: '0.25em', marginRight: 'auto' },
   topActions: { display: 'flex', gap: '8px' },
+  topActionsMobile: { gap: '4px' },
   iconBtn: {
     padding: '6px 14px', background: 'transparent',
     border: '1px solid #3a3020', borderRadius: '2px',
@@ -229,15 +326,21 @@ const styles = {
     letterSpacing: '0.1em', fontFamily: "'Noto Serif SC', serif",
     transition: 'all 0.15s',
   },
+  iconBtnMobile: { padding: '6px 10px', fontSize: '14px', letterSpacing: 0 },
+
+  // Content
   content: { flex: 1, overflowY: 'auto', padding: '40px 60px', maxWidth: '780px', margin: '0 auto', width: '100%' },
+  contentMobile: { padding: '20px 16px' },
   placeholder: { height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px' },
   placeholderIcon: { fontSize: '60px', color: '#2a2818', lineHeight: 1 },
   placeholderText: { color: '#4a4030', fontSize: '16px', letterSpacing: '0.2em' },
   placeholderSub: { color: '#3a3020', fontSize: '12px', letterSpacing: '0.15em' },
   scriptureTitle: { fontSize: '28px', color: '#f0d080', fontWeight: 700, letterSpacing: '0.15em', marginBottom: '8px', textAlign: 'center' },
+  scriptureTitleMobile: { fontSize: '22px' },
   chapterTitle: { fontSize: '16px', color: '#a09070', fontWeight: 400, letterSpacing: '0.2em', textAlign: 'center', marginBottom: '40px' },
   body: { lineHeight: 2.2 },
   para: { marginBottom: '28px', fontSize: '18px', color: '#d4c090', letterSpacing: '0.08em', lineHeight: 2.2, cursor: 'text' },
+  paraMobile: { fontSize: '16px', lineHeight: 2.0, marginBottom: '20px' },
   chapterNav: { display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '40px', paddingTop: '24px', borderTop: '1px solid #1a1808' },
   chBtn: { padding: '8px 16px', background: 'transparent', border: '1px solid #2a2818', borderRadius: '2px', color: '#7a7060', fontSize: '13px', cursor: 'pointer' },
   chBtnActive: { border: '1px solid #c9a84c', color: '#c9a84c' },
