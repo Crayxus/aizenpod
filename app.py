@@ -306,6 +306,19 @@ def explain():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/api/books', methods=['GET'])
+def get_books():
+    """Get list of all books (箱)"""
+    try:
+        result = jxz_api_post('/api/book/get-book-list', {'pageNum': 1, 'pageSize': 100})
+        if result['code'] == 0:
+            books = result['data']['rows']
+            return jsonify({'success': True, 'books': books})
+        else:
+            return jsonify({'success': False, 'error': result.get('msg')})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 @app.route('/api/letters', methods=['GET'])
 def get_letters():
     """Get list of letters (函) for a book"""

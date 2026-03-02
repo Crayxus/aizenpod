@@ -743,9 +743,9 @@
 
 <!-- NAV BAR -->
 <div class="nav-bar">
-    <span class="nav-label">经书</span>
-    <select class="nav-select" id="bookSelect" onchange="loadBook()">
-        <option value="20000">嘉兴藏大藏经</option>
+    <span class="nav-label">箱</span>
+    <select class="nav-select" id="bookSelect" onchange="onBookChange()">
+        <option value="">— 加载中 —</option>
     </select>
 
     <span class="nav-label">函</span>
@@ -856,7 +856,7 @@ let voices = [];
 // ============ Init ============
 window.onload = function() {
     loadVoices();
-    loadBook();
+    loadAllBooks();
     document.getElementById('rateRange').addEventListener('input', function() {
         document.getElementById('rateDisplay').textContent = parseFloat(this.value).toFixed(2) + '×';
     });
@@ -879,10 +879,41 @@ function loadVoices() {
     });
 }
 
-// ============ Book Loading ============
-async function loadBook() {
-    currentBookId = parseInt(document.getElementById('bookSelect').value);
-    showLoading('正在获取经书信息', '');
+// ============ Load All Books (箱) ============
+async function loadAllBooks() {
+    try {
+        const resp = await fetch('/api/books');
+        const data = await resp.json();
+        if (data.success) {
+            const sel = document.getElementById('bookSelect');
+            sel.innerHTML = '<option value="">— 请选择箱 —</option>';
+            // Only show type=2 books (箱 with letters)
+            const boxes = data.books.filter(b => b.book_type === 2 && b.book_letter);
+            boxes.forEach(b => {
+                const opt = document.createElement('option');
+                opt.value = b.id;
+                opt.textContent = `${b.book_name}（${b.book_letter}函·${b.book_page}页）`;
+                sel.appendChild(opt);
+            });
+            // Default select first box
+            if (boxes.length > 0) {
+                sel.value = boxes[0].id;
+                onBookChange();
+            }
+        }
+    } catch(e) {
+        console.error('加载书目失败:', e);
+    }
+}
+
+async function onBookChange() {
+    const val = document.getElementById('bookSelect').value;
+    if (!val) return;
+    currentBookId = parseInt(val);
+    currentPageNum = 1;
+    document.getElementById('pageInput').value = 1;
+    
+    // Load letters for this book
     try {
         const resp = await fetch(`/api/letters?book_id=${currentBookId}`);
         const data = await resp.json();
@@ -901,9 +932,7 @@ async function loadBook() {
             });
         }
     } catch(e) {
-        showError('加载经书信息失败：' + e.message);
-    } finally {
-        hideLoading();
+        console.error('加载函列表失败:', e);
     }
 }
 
