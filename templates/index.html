@@ -866,17 +866,23 @@ window.onload = function() {
 };
 
 function loadVoices() {
-    voices = speechSynth.getVoices();
+    const newVoices = speechSynth.getVoices();
+    if (newVoices.length === 0) return; // not ready yet
+    voices = newVoices;
     const select = document.getElementById('voiceSelect');
+    const prevName = select.options[select.selectedIndex] ? select.options[select.selectedIndex].text : '';
     select.innerHTML = '';
     const zhVoices = voices.filter(v => v.lang.includes('zh') || v.lang.includes('cmn'));
     const list = zhVoices.length > 0 ? zhVoices : voices;
-    list.forEach(voice => {
+    let defaultIdx = 0;
+    list.forEach((voice, i) => {
         const opt = document.createElement('option');
         opt.value = voices.indexOf(voice);
         opt.textContent = voice.name;
         select.appendChild(opt);
+        if (voice.name === prevName) defaultIdx = i;
     });
+    select.selectedIndex = defaultIdx;
 }
 
 // ============ Load All Books (箱) ============
