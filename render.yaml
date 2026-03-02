@@ -3,7 +3,7 @@ services:
     name: dzj-scripture-reader
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 300 --workers 2
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 300 --workers 1 --threads 8 --worker-class gthread
     envVars:
       - key: DOUBAO_API_KEY
         value: 9fb81ccb-ed98-496e-8819-7f6ee7c54abb

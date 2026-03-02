@@ -1,4 +1,4 @@
-"""
+ """
 嘉兴藏经书阅读器 - Flask Web Application
 功能：
 1. 从嘉兴藏网站获取经书图片
@@ -88,7 +88,7 @@ def doubao_chat(messages, model=None, max_tokens=4096):
         "messages": messages,
         "max_tokens": max_tokens
     }
-    resp = requests.post(ARK_URL, headers=headers, json=data, timeout=120)
+    resp = requests.post(ARK_URL, headers=headers, json=data, timeout=180)
     result = resp.json()
     if resp.status_code == 200:
         return result['choices'][0]['message']['content']
@@ -308,6 +308,66 @@ def get_book_info():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+# In-progress processing jobs: key -> threading.Event + result dict
+_processing_jobs = {}
+_processing_lock = threading.Lock()
+
+def process_page_job(book_id, letter_id, page_num, event, result_holder):
+    """Process a page in a background thread and signal when done"""
+    try:
+        result = jxz_api_post('/api/book/get-book-page', {
+            'book_id': book_id,
+            'letter_id': letter_id,
+            'pageNum': page_num,
+            'pageSize': 1
+        })
+        if result['code'] != 0:
+            result_holder['error'] = result.get('msg', 'API error')
+            return
+        
+        page_data = result['data']['rows'][0]
+        total_pages = result['data']['count']
+        img_url = page_data['page_img']
+        if img_url.startswith('//'):
+            img_url = 'https:' + img_url
+        
+        raw_text = ocr_image(img_url)
+        
+        if '[图像页]' in raw_text or len(raw_text.strip()) < 10:
+            page_result = {
+                'page_num': page_num,
+                'total_pages': total_pages,
+                'img_url': img_url,
+                'raw_text': raw_text,
+                'punctuated_text': raw_text,
+                'sentences': [],
+                'is_image_page': True
+            }
+        else:
+            punctuated = add_punctuation(raw_text)
+            sentences = split_into_sentences(punctuated)
+            page_result = {
+                'page_num': page_num,
+                'total_pages': total_pages,
+                'img_url': img_url,
+                'raw_text': raw_text,
+                'punctuated_text': punctuated,
+                'sentences': sentences,
+                'is_image_page': False
+            }
+        
+        save_cached_page(book_id, letter_id, page_num, page_result)
+        result_holder['data'] = page_result
+    except Exception as e:
+        import traceback
+        result_holder['error'] = str(e)
+        result_holder['traceback'] = traceback.format_exc()
+    finally:
+        event.set()
+        key = get_cache_key(book_id, letter_id, page_num)
+        with _processing_lock:
+            _processing_jobs.pop(key, None)
+
 @app.route('/api/page', methods=['GET'])
 def get_page():
     """Get a page of scripture - OCR and add punctuation"""
@@ -322,61 +382,29 @@ def get_page():
         if cached:
             return jsonify({'success': True, 'data': cached, 'cached': True})
     
-    try:
-        # Get page info from JXZ API
-        result = jxz_api_post('/api/book/get-book-page', {
-            'book_id': book_id,
-            'letter_id': letter_id,
-            'pageNum': page_num,
-            'pageSize': 1
-        })
-        
-        if result['code'] != 0:
-            return jsonify({'success': False, 'error': result.get('msg', 'API error')})
-        
-        page_data = result['data']['rows'][0]
-        total_pages = result['data']['count']
-        img_url = page_data['page_img']
-        if img_url.startswith('//'):
-            img_url = 'https:' + img_url
-        
-        # OCR the image
-        raw_text = ocr_image(img_url)
-        
-        # Check if it's an image page (no text)
-        if '[图像页]' in raw_text or len(raw_text.strip()) < 10:
-            page_result = {
-                'page_num': page_num,
-                'total_pages': total_pages,
-                'img_url': img_url,
-                'raw_text': raw_text,
-                'punctuated_text': raw_text,
-                'sentences': [],
-                'is_image_page': True
-            }
-        else:
-            # Add punctuation
-            punctuated = add_punctuation(raw_text)
-            sentences = split_into_sentences(punctuated)
-            
-            page_result = {
-                'page_num': page_num,
-                'total_pages': total_pages,
-                'img_url': img_url,
-                'raw_text': raw_text,
-                'punctuated_text': punctuated,
-                'sentences': sentences,
-                'is_image_page': False
-            }
-        
-        # Cache the result
-        save_cached_page(book_id, letter_id, page_num, page_result)
-        
-        return jsonify({'success': True, 'data': page_result, 'cached': False})
+    key = get_cache_key(book_id, letter_id, page_num)
     
-    except Exception as e:
-        import traceback
-        return jsonify({'success': False, 'error': str(e), 'traceback': traceback.format_exc()})
+    # Check if already being processed
+    with _processing_lock:
+        if key in _processing_jobs:
+            event, result_holder = _processing_jobs[key]
+        else:
+            event = threading.Event()
+            result_holder = {}
+            _processing_jobs[key] = (event, result_holder)
+            t = threading.Thread(target=process_page_job, args=(book_id, letter_id, page_num, event, result_holder), daemon=True)
+            t.start()
+    
+    # Wait up to 240 seconds for the result
+    finished = event.wait(timeout=240)
+    
+    if not finished:
+        return jsonify({'success': False, 'error': 'AI处理超时，请稍后重试（页面正在后台继续处理）'})
+    
+    if 'error' in result_holder:
+        return jsonify({'success': False, 'error': result_holder['error']})
+    
+    return jsonify({'success': True, 'data': result_holder['data'], 'cached': False})
 
 @app.route('/api/explain', methods=['POST'])
 def explain():
