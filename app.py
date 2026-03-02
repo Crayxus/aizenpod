@@ -300,6 +300,16 @@ def cache_worker():
         cache_queue.task_done()
         time.sleep(2)  # Rate limit: 2s between pages
 
+def ensure_worker_alive():
+    """Ensure the cache worker thread is running, restart if dead"""
+    global _worker_thread
+    if not _worker_thread.is_alive():
+        import logging
+        logging.getLogger('cache_worker').warning("Worker thread died, restarting...")
+        _worker_thread = threading.Thread(target=cache_worker, daemon=False)
+        _worker_thread.start()
+    return _worker_thread.is_alive()
+
 # Start background worker thread (non-daemon so gunicorn sync worker keeps it alive)
 _worker_thread = threading.Thread(target=cache_worker, daemon=False)
 _worker_thread.start()
@@ -471,6 +481,9 @@ def get_letters():
 @app.route('/api/cache/start', methods=['POST'])
 def start_cache():
     """Start background caching for a letter (函)"""
+    # Ensure worker is alive before starting
+    ensure_worker_alive()
+    
     data = request.get_json()
     book_id = data.get('book_id', 20000)
     letter_id = data.get('letter_id', 1)
@@ -509,6 +522,10 @@ def cache_status_api():
     book_id = request.args.get('book_id', 20000, type=int)
     letter_id = request.args.get('letter_id', 1, type=int)
     total_pages = request.args.get('total_pages', 0, type=int)
+    
+    # Auto-restart worker if dead and there are pending jobs
+    if not _worker_thread.is_alive() and cache_queue.qsize() > 0:
+        ensure_worker_alive()
     
     result = {
         'queue_size': cache_queue.qsize(),
