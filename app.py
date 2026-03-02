@@ -212,6 +212,11 @@ cache_status_lock = threading.Lock()
 
 def cache_worker():
     """Background thread that processes cache jobs one at a time"""
+    import logging
+    logging.basicConfig(level=logging.INFO)
+    log = logging.getLogger('cache_worker')
+    log.info("Cache worker started")
+    
     while True:
         try:
             job = cache_queue.get(timeout=5)
@@ -223,8 +228,11 @@ def cache_worker():
         page_num = job['page_num']
         key = get_cache_key(book_id, letter_id, page_num)
         
+        log.info(f"Processing page: book={book_id} letter={letter_id} page={page_num}")
+        
         # Skip if already cached
         if get_cached_page(book_id, letter_id, page_num):
+            log.info(f"  -> Already cached, skipping")
             with cache_status_lock:
                 cache_status[key] = 'done'
             cache_queue.task_done()
@@ -234,6 +242,7 @@ def cache_worker():
             cache_status[key] = 'processing'
         
         try:
+            log.info(f"  -> Fetching page info from JXZ API...")
             result = jxz_api_post('/api/book/get-book-page', {
                 'book_id': book_id,
                 'letter_id': letter_id,
@@ -249,7 +258,9 @@ def cache_worker():
             if img_url.startswith('//'):
                 img_url = 'https:' + img_url
             
+            log.info(f"  -> OCR image: {img_url[:60]}...")
             raw_text = ocr_image(img_url)
+            log.info(f"  -> OCR done, text length: {len(raw_text)}")
             
             if '[图像页]' in raw_text or len(raw_text.strip()) < 10:
                 page_result = {
@@ -261,7 +272,9 @@ def cache_worker():
                     'sentences': [],
                     'is_image_page': True
                 }
+                log.info(f"  -> Image page, saved")
             else:
+                log.info(f"  -> Adding punctuation...")
                 punctuated = add_punctuation(raw_text)
                 sentences = split_into_sentences(punctuated)
                 page_result = {
@@ -273,12 +286,14 @@ def cache_worker():
                     'sentences': sentences,
                     'is_image_page': False
                 }
+                log.info(f"  -> Done! {len(sentences)} sentences")
             
             save_cached_page(book_id, letter_id, page_num, page_result)
             with cache_status_lock:
                 cache_status[key] = 'done'
         
         except Exception as e:
+            log.error(f"  -> ERROR: {e}")
             with cache_status_lock:
                 cache_status[key] = f'error: {str(e)[:80]}'
         
@@ -288,6 +303,7 @@ def cache_worker():
 # Start background worker thread
 _worker_thread = threading.Thread(target=cache_worker, daemon=True)
 _worker_thread.start()
+print("Cache worker thread started:", _worker_thread.is_alive())
 
 # ============ Flask Routes ============
 
@@ -496,6 +512,7 @@ def cache_status_api():
     
     result = {
         'queue_size': cache_queue.qsize(),
+        'worker_alive': _worker_thread.is_alive(),
         'pages': {}
     }
     
