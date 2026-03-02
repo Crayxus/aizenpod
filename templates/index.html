@@ -592,7 +592,7 @@
         }
 
         .panel-header {
-            padding: 18px 20px;
+            padding: 14px 20px;
             border-bottom: 1px solid rgba(201,168,76,0.15);
             display: flex;
             align-items: center;
@@ -615,6 +615,29 @@
             font-weight: 400;
             color: var(--gold);
             letter-spacing: 2px;
+            flex: 1;
+        }
+        .btn-read-explain {
+            padding: 5px 12px;
+            border: 1px solid rgba(201,168,76,0.3);
+            border-radius: 15px;
+            background: rgba(201,168,76,0.08);
+            color: var(--gold);
+            font-size: 12px;
+            font-family: inherit;
+            cursor: pointer;
+            letter-spacing: 1px;
+            transition: all 0.2s;
+            display: none;
+        }
+        .btn-read-explain:hover {
+            background: rgba(201,168,76,0.18);
+            border-color: rgba(201,168,76,0.5);
+        }
+        .btn-read-explain.playing {
+            background: rgba(139,26,26,0.25);
+            border-color: rgba(139,26,26,0.5);
+            color: #ff9999;
         }
 
         .panel-body {
@@ -807,6 +830,7 @@
         <div class="panel-header">
             <div class="panel-header-icon">📖</div>
             <h3>经文解义</h3>
+            <button class="btn-read-explain" id="btnReadExplain" onclick="toggleReadExplanation()">🔊 朗读解义</button>
         </div>
         <div class="panel-body" id="explanationArea">
             <div class="panel-placeholder">
@@ -1013,8 +1037,15 @@ function stopSpeech() {
 }
 
 // ============ AI Explanation ============
+let currentExplanationText = '';
+
 async function getExplanation(text) {
     const area = document.getElementById('explanationArea');
+    const btn = document.getElementById('btnReadExplain');
+    currentExplanationText = '';
+    btn.style.display = 'none';
+    btn.classList.remove('playing');
+    
     area.innerHTML = `
         <div class="selected-quote">${escapeHtml(text)}</div>
         <div class="ai-loading">AI 正在解义<span class="dots"></span></div>`;
@@ -1026,14 +1057,46 @@ async function getExplanation(text) {
         });
         const data = await resp.json();
         if (data.success) {
+            currentExplanationText = data.explanation;
             area.innerHTML = `
                 <div class="selected-quote">${escapeHtml(text)}</div>
                 <div class="explanation-body">${formatMd(data.explanation)}</div>`;
+            btn.style.display = 'inline-block';
         } else {
             area.innerHTML = `<div class="selected-quote">${escapeHtml(text)}</div><div class="error-box">解义失败：${escapeHtml(data.error)}</div>`;
         }
     } catch(e) {
         area.innerHTML = `<div class="selected-quote">${escapeHtml(text)}</div><div class="error-box">网络错误：${escapeHtml(e.message)}</div>`;
+    }
+}
+
+function toggleReadExplanation() {
+    const btn = document.getElementById('btnReadExplain');
+    if (speechSynth.speaking) {
+        stopSpeech();
+        btn.classList.remove('playing');
+        btn.textContent = '🔊 朗读解义';
+    } else {
+        if (!currentExplanationText) return;
+        // Strip markdown for TTS
+        const plainText = currentExplanationText
+            .replace(/###?\s*/g, '')
+            .replace(/\*\*(.+?)\*\*/g, '$1')
+            .replace(/\n+/g, '，');
+        const utt = new SpeechSynthesisUtterance(plainText);
+        const vSel = document.getElementById('voiceSelect');
+        if (vSel.value !== '') utt.voice = voices[parseInt(vSel.value)];
+        utt.rate = parseFloat(document.getElementById('rateRange').value);
+        utt.lang = 'zh-CN';
+        utt.onstart = () => {
+            btn.classList.add('playing');
+            btn.textContent = '⏹ 停止朗读';
+        };
+        utt.onend = utt.onerror = () => {
+            btn.classList.remove('playing');
+            btn.textContent = '🔊 朗读解义';
+        };
+        speechSynth.speak(utt);
     }
 }
 
