@@ -300,8 +300,8 @@ def cache_worker():
         cache_queue.task_done()
         time.sleep(2)  # Rate limit: 2s between pages
 
-# Start background worker thread
-_worker_thread = threading.Thread(target=cache_worker, daemon=True)
+# Start background worker thread (non-daemon so gunicorn sync worker keeps it alive)
+_worker_thread = threading.Thread(target=cache_worker, daemon=False)
 _worker_thread.start()
 print("Cache worker thread started:", _worker_thread.is_alive())
 
