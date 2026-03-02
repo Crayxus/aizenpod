@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: dzj-scripture-reader
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 300 --workers 2
+    envVars:
+      - key: DOUBAO_API_KEY
+        value: 9fb81ccb-ed98-496e-8819-7f6ee7c54abb
+      - key: PYTHON_VERSION
+        value: 3.11.0
+    disk:
+      name: cache
+      mountPath: /opt/render/project/src/cache
+      sizeGB: 1
