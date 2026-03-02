@@ -17,6 +17,8 @@ import hashlib
 import time
 import os
 import re
+import threading
+import queue
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad
 
@@ -202,6 +204,91 @@ def save_cached_page(book_id, letter_id, page_num, data):
     with open(cache_file, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
+# ============ Background Cache Worker ============
+
+cache_queue = queue.Queue()
+cache_status = {}  # key -> 'pending' | 'processing' | 'done' | 'error'
+cache_status_lock = threading.Lock()
+
+def cache_worker():
+    """Background thread that processes cache jobs one at a time"""
+    while True:
+        try:
+            job = cache_queue.get(timeout=5)
+        except queue.Empty:
+            continue
+        
+        book_id = job['book_id']
+        letter_id = job['letter_id']
+        page_num = job['page_num']
+        key = get_cache_key(book_id, letter_id, page_num)
+        
+        # Skip if already cached
+        if get_cached_page(book_id, letter_id, page_num):
+            with cache_status_lock:
+                cache_status[key] = 'done'
+            cache_queue.task_done()
+            continue
+        
+        with cache_status_lock:
+            cache_status[key] = 'processing'
+        
+        try:
+            result = jxz_api_post('/api/book/get-book-page', {
+                'book_id': book_id,
+                'letter_id': letter_id,
+                'pageNum': page_num,
+                'pageSize': 1
+            })
+            if result['code'] != 0:
+                raise Exception(result.get('msg', 'API error'))
+            
+            page_data = result['data']['rows'][0]
+            total_pages = result['data']['count']
+            img_url = page_data['page_img']
+            if img_url.startswith('//'):
+                img_url = 'https:' + img_url
+            
+            raw_text = ocr_image(img_url)
+            
+            if '[图像页]' in raw_text or len(raw_text.strip()) < 10:
+                page_result = {
+                    'page_num': page_num,
+                    'total_pages': total_pages,
+                    'img_url': img_url,
+                    'raw_text': raw_text,
+                    'punctuated_text': raw_text,
+                    'sentences': [],
+                    'is_image_page': True
+                }
+            else:
+                punctuated = add_punctuation(raw_text)
+                sentences = split_into_sentences(punctuated)
+                page_result = {
+                    'page_num': page_num,
+                    'total_pages': total_pages,
+                    'img_url': img_url,
+                    'raw_text': raw_text,
+                    'punctuated_text': punctuated,
+                    'sentences': sentences,
+                    'is_image_page': False
+                }
+            
+            save_cached_page(book_id, letter_id, page_num, page_result)
+            with cache_status_lock:
+                cache_status[key] = 'done'
+        
+        except Exception as e:
+            with cache_status_lock:
+                cache_status[key] = f'error: {str(e)[:80]}'
+        
+        cache_queue.task_done()
+        time.sleep(2)  # Rate limit: 2s between pages
+
+# Start background worker thread
+_worker_thread = threading.Thread(target=cache_worker, daemon=True)
+_worker_thread.start()
+
 # ============ Flask Routes ============
 
 @app.route('/')
@@ -336,6 +423,85 @@ def get_letters():
             return jsonify({'success': False, 'error': result.get('msg')})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/cache/start', methods=['POST'])
+def start_cache():
+    """Start background caching for a letter (函)"""
+    data = request.get_json()
+    book_id = data.get('book_id', 20000)
+    letter_id = data.get('letter_id', 1)
+    total_pages = data.get('total_pages', 0)
+    start_page = data.get('start_page', 1)
+    
+    if total_pages <= 0:
+        return jsonify({'success': False, 'error': 'total_pages required'})
+    
+    queued = 0
+    skipped = 0
+    for page_num in range(start_page, total_pages + 1):
+        key = get_cache_key(book_id, letter_id, page_num)
+        # Skip if already cached or already queued
+        if get_cached_page(book_id, letter_id, page_num):
+            skipped += 1
+            continue
+        with cache_status_lock:
+            if cache_status.get(key) in ('pending', 'processing', 'done'):
+                skipped += 1
+                continue
+            cache_status[key] = 'pending'
+        cache_queue.put({'book_id': book_id, 'letter_id': letter_id, 'page_num': page_num})
+        queued += 1
+    
+    return jsonify({
+        'success': True,
+        'queued': queued,
+        'skipped': skipped,
+        'queue_size': cache_queue.qsize()
+    })
+
+@app.route('/api/cache/status', methods=['GET'])
+def cache_status_api():
+    """Get cache status for a letter"""
+    book_id = request.args.get('book_id', 20000, type=int)
+    letter_id = request.args.get('letter_id', 1, type=int)
+    total_pages = request.args.get('total_pages', 0, type=int)
+    
+    result = {
+        'queue_size': cache_queue.qsize(),
+        'pages': {}
+    }
+    
+    for page_num in range(1, total_pages + 1):
+        key = get_cache_key(book_id, letter_id, page_num)
+        if get_cached_page(book_id, letter_id, page_num):
+            result['pages'][page_num] = 'done'
+        else:
+            with cache_status_lock:
+                result['pages'][page_num] = cache_status.get(key, 'none')
+    
+    done_count = sum(1 for v in result['pages'].values() if v == 'done')
+    result['done'] = done_count
+    result['total'] = total_pages
+    result['percent'] = round(done_count / total_pages * 100) if total_pages > 0 else 0
+    
+    return jsonify(result)
+
+@app.route('/api/cache/stop', methods=['POST'])
+def stop_cache():
+    """Clear the cache queue"""
+    cleared = 0
+    while not cache_queue.empty():
+        try:
+            job = cache_queue.get_nowait()
+            key = get_cache_key(job['book_id'], job['letter_id'], job['page_num'])
+            with cache_status_lock:
+                if cache_status.get(key) == 'pending':
+                    cache_status[key] = 'none'
+            cache_queue.task_done()
+            cleared += 1
+        except queue.Empty:
+            break
+    return jsonify({'success': True, 'cleared': cleared})
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

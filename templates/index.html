@@ -640,6 +640,66 @@
             color: #ff9999;
         }
 
+        /* Cache Panel */
+        .cache-panel {
+            margin: 0 30px 15px;
+            padding: 12px 18px;
+            background: rgba(201,168,76,0.04);
+            border: 1px solid rgba(201,168,76,0.12);
+            border-radius: 8px;
+            display: none;
+        }
+        .cache-panel.active { display: block; }
+        .cache-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+        .cache-title {
+            font-size: 13px;
+            color: rgba(201,168,76,0.7);
+            letter-spacing: 1px;
+            flex: 1;
+        }
+        .cache-progress-bar {
+            height: 4px;
+            background: rgba(201,168,76,0.1);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .cache-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--gold-dark), var(--gold));
+            border-radius: 2px;
+            transition: width 0.5s ease;
+            width: 0%;
+        }
+        .cache-info {
+            font-size: 11px;
+            color: rgba(201,168,76,0.4);
+            margin-top: 5px;
+            letter-spacing: 1px;
+        }
+        .btn-cache {
+            padding: 4px 12px;
+            border: 1px solid rgba(201,168,76,0.25);
+            border-radius: 12px;
+            background: rgba(201,168,76,0.06);
+            color: var(--gold);
+            font-size: 11px;
+            font-family: inherit;
+            cursor: pointer;
+            letter-spacing: 1px;
+            transition: all 0.2s;
+        }
+        .btn-cache:hover { background: rgba(201,168,76,0.15); }
+        .btn-cache.running {
+            background: rgba(139,26,26,0.2);
+            border-color: rgba(139,26,26,0.4);
+            color: #ff9999;
+        }
+
         .panel-body {
             flex: 1;
             overflow-y: auto;
@@ -799,6 +859,19 @@
             <input type="range" class="tts-range" id="rateRange" min="0.5" max="2" step="0.1" value="0.85">
             <span class="rate-display" id="rateDisplay">0.85×</span>
             <button class="btn btn-stop" onclick="stopSpeech()" id="stopBtn" style="display:none;font-size:12px;padding:5px 12px;">⏹ 停止</button>
+        </div>
+
+        <!-- Cache Panel -->
+        <div class="cache-panel" id="cachePanel">
+            <div class="cache-header">
+                <span class="cache-title">⚡ 后台缓存</span>
+                <span id="cachePercent" style="font-size:12px;color:var(--gold);">0%</span>
+                <button class="btn-cache" id="btnCache" onclick="toggleCache()">开始缓存</button>
+            </div>
+            <div class="cache-progress-bar">
+                <div class="cache-progress-fill" id="cacheProgressFill"></div>
+            </div>
+            <div class="cache-info" id="cacheInfo">选择函后可开始后台缓存全部页面</div>
         </div>
 
         <!-- Content -->
@@ -1024,6 +1097,9 @@ function displayPage(pageData, cached) {
 
     html += `</div><div class="hint-text">单击句子 · 语音朗读 &nbsp;|&nbsp; 双击句子 · AI 解义</div></div>`;
     content.innerHTML = html;
+    
+    // Show cache panel with total pages info
+    showCachePanel(totalPages);
 }
 
 // ============ Sentence Interaction ============
@@ -1156,6 +1232,70 @@ function nextPage() {
 function jumpToPage() {
     const val = parseInt(document.getElementById('pageInput').value);
     if (val >= 1 && val <= totalPages) { currentPageNum = val; fetchAndDisplayPage(); }
+}
+
+// ============ Background Cache ============
+let cacheRunning = false;
+let cachePollingTimer = null;
+let cacheTotalPages = 0;
+
+function showCachePanel(total) {
+    cacheTotalPages = total;
+    document.getElementById('cachePanel').classList.add('active');
+    updateCacheStatus();
+}
+
+async function toggleCache() {
+    const btn = document.getElementById('btnCache');
+    if (cacheRunning) {
+        // Stop
+        await fetch('/api/cache/stop', {method: 'POST'});
+        cacheRunning = false;
+        btn.textContent = '开始缓存';
+        btn.classList.remove('running');
+        if (cachePollingTimer) { clearInterval(cachePollingTimer); cachePollingTimer = null; }
+        document.getElementById('cacheInfo').textContent = '已暂停';
+    } else {
+        // Start
+        const resp = await fetch('/api/cache/start', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                book_id: currentBookId,
+                letter_id: currentLetterId,
+                total_pages: cacheTotalPages,
+                start_page: 1
+            })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            cacheRunning = true;
+            btn.textContent = '⏹ 停止';
+            btn.classList.add('running');
+            document.getElementById('cacheInfo').textContent = `已加入队列 ${data.queued} 页，跳过 ${data.skipped} 页（已缓存）`;
+            // Poll status every 5s
+            cachePollingTimer = setInterval(updateCacheStatus, 5000);
+        }
+    }
+}
+
+async function updateCacheStatus() {
+    if (!cacheTotalPages) return;
+    try {
+        const resp = await fetch(`/api/cache/status?book_id=${currentBookId}&letter_id=${currentLetterId}&total_pages=${cacheTotalPages}`);
+        const data = await resp.json();
+        const pct = data.percent || 0;
+        document.getElementById('cacheProgressFill').style.width = pct + '%';
+        document.getElementById('cachePercent').textContent = pct + '%';
+        document.getElementById('cacheInfo').textContent = `已完成 ${data.done}/${data.total} 页 · 队列剩余 ${data.queue_size} 页`;
+        
+        if (data.done >= data.total && cacheRunning) {
+            cacheRunning = false;
+            document.getElementById('btnCache').textContent = '✓ 已完成';
+            document.getElementById('btnCache').classList.remove('running');
+            if (cachePollingTimer) { clearInterval(cachePollingTimer); cachePollingTimer = null; }
+        }
+    } catch(e) {}
 }
 
 // ============ UI Helpers ============
