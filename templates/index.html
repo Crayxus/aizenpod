@@ -861,7 +861,7 @@
             <button class="btn btn-stop" onclick="stopSpeech()" id="stopBtn" style="display:none;font-size:12px;padding:5px 12px;">⏹ 停止</button>
         </div>
 
-        <!-- Cache Panel -->
+        <!-- Cache Panel - shown after selecting a letter, even before loading a page -->
         <div class="cache-panel" id="cachePanel">
             <div class="cache-header">
                 <span class="cache-title">⚡ 后台缓存</span>
@@ -1021,6 +1021,19 @@ function onLetterChange() {
         currentLetterId = parseInt(val);
         currentPageNum = 1;
         document.getElementById('pageInput').value = 1;
+        // Show cache panel immediately when a letter is selected
+        // We need total_pages - get it from the book info
+        // For now show panel with 0 pages so user can see it
+        const panel = document.getElementById('cachePanel');
+        panel.classList.add('active');
+        document.getElementById('cacheInfo').textContent = '点击「载入经文」后可开始后台缓存';
+        // Reset cache state for new letter
+        cacheRunning = false;
+        cacheTotalPages = 0;
+        document.getElementById('btnCache').textContent = '开始缓存';
+        document.getElementById('btnCache').classList.remove('running');
+        document.getElementById('cacheProgressFill').style.width = '0%';
+        document.getElementById('cachePercent').textContent = '0%';
     }
 }
 
@@ -1099,7 +1112,7 @@ function displayPage(pageData, cached) {
     content.innerHTML = html;
     
     // Show cache panel with total pages info
-    showCachePanel(totalPages);
+    showCachePanel(pageData.total_pages);
 }
 
 // ============ Sentence Interaction ============
