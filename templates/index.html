@@ -1300,13 +1300,22 @@ async function updateCacheStatus() {
         const pct = data.percent || 0;
         document.getElementById('cacheProgressFill').style.width = pct + '%';
         document.getElementById('cachePercent').textContent = pct + '%';
-        document.getElementById('cacheInfo').textContent = `已完成 ${data.done}/${data.total} 页 · 队列剩余 ${data.queue_size} 页`;
         
-        if (data.done >= data.total && cacheRunning) {
+        const queueSize = data.queue_size || 0;
+        if (queueSize > 0) {
+            document.getElementById('cacheInfo').textContent = `已完成 ${data.done}/${data.total} 页 · 队列剩余 ${queueSize} 页（后台处理中）`;
+        } else if (cacheRunning) {
+            document.getElementById('cacheInfo').textContent = `已完成 ${data.done}/${data.total} 页 · 等待任务...`;
+        } else {
+            document.getElementById('cacheInfo').textContent = `已完成 ${data.done}/${data.total} 页`;
+        }
+        
+        if (data.done >= data.total && data.total > 0) {
             cacheRunning = false;
             document.getElementById('btnCache').textContent = '✓ 已完成';
             document.getElementById('btnCache').classList.remove('running');
             if (cachePollingTimer) { clearInterval(cachePollingTimer); cachePollingTimer = null; }
+            document.getElementById('cacheInfo').textContent = `✓ 全部 ${data.total} 页已缓存完成`;
         }
     } catch(e) {}
 }
