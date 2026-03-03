@@ -1,0 +1,4 @@
+2026-02-22 19:58:45.2130-INFO v2rayN start up | v2rayN - V6.55 - 2024/08/05 | C:\Users\Jayzee\Desktop\v2rayN-With-Core-6.5.5\v2rayN.exe
+2026-02-22 19:58:45.2228-INFO Microsoft Windows NT 10.0.26200.0 - 64
+2026-02-22 19:59:45.9309-INFO UpdateTaskRunSubscription
+2026-02-22 20:00:45.9283-INFO UpdateTaskRunGeo

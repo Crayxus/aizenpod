@@ -1,0 +1,81 @@
+2026-02-26 13:26:50.6666-INFO Current_SessionEnding
+2026-02-26 13:26:50.6666-INFO MyAppExit Begin
+2026-02-26 13:26:50.8926-INFO MyAppExit End
+2026-02-26 13:32:13.3366-INFO v2rayN start up | v2rayN - V6.55 - 2024/08/05 | C:\Users\Jayzee\Desktop\v2rayN-With-Core-6.5.5\v2rayN.exe
+2026-02-26 13:32:13.3465-INFO Microsoft Windows NT 10.0.26200.0 - 64
+2026-02-26 13:33:13.8730-INFO UpdateTaskRunSubscription
+2026-02-26 13:34:13.8691-INFO UpdateTaskRunGeo
+2026-02-26 13:35:04.0195-INFO Current_SessionEnding
+2026-02-26 13:35:04.0195-INFO MyAppExit Begin
+2026-02-26 13:35:04.2007-INFO MyAppExit End
+2026-02-26 13:38:03.4560-INFO v2rayN start up | v2rayN - V6.55 - 2024/08/05 | C:\Users\Jayzee\Desktop\v2rayN-With-Core-6.5.5\v2rayN.exe
+2026-02-26 13:38:03.4560-INFO Microsoft Windows NT 10.0.26200.0 - 64
+2026-02-26 13:39:04.0470-INFO UpdateTaskRunSubscription
+2026-02-26 13:39:55.1172-INFO MyAppExit Begin
+2026-02-26 13:39:55.1581-INFO MyAppExit End
+2026-02-26 13:39:55.1581-INFO OnExit
+2026-02-26 13:44:18.9736-INFO v2rayN start up | v2rayN - V6.55 - 2024/08/05 | C:\Users\Jayzee\Desktop\v2rayN-With-Core-6.5.5\v2rayN.exe
+2026-02-26 13:44:18.9835-INFO Microsoft Windows NT 10.0.26200.0 - 64
+2026-02-26 13:45:19.5527-INFO UpdateTaskRunSubscription
+2026-02-26 13:46:12.2639-DEBUG Base64Decode,The input is not a valid Base-64 string as it contains a non-base 64 character, more than two padding characters, or an illegal character among the padding characters.
+2026-02-26 13:46:12.2699-DEBUG    at System.Convert.FromBase64_ComputeResultLength(Char* inputPtr, Int32 inputLength)
+   at System.Convert.FromBase64CharPtr(Char* inputPtr, Int32 inputLength)
+   at System.Convert.FromBase64String(String s)
+   at v2rayN.Utils.Base64Decode(String plainText)
+2026-02-26 13:46:19.5541-INFO UpdateTaskRunGeo
+2026-02-26 13:46:33.4056-DEBUG Base64Decode,The input is not a valid Base-64 string as it contains a non-base 64 character, more than two padding characters, or an illegal character among the padding characters.
+2026-02-26 13:46:33.4056-DEBUG    at System.Convert.FromBase64_ComputeResultLength(Char* inputPtr, Int32 inputLength)
+   at System.Convert.FromBase64CharPtr(Char* inputPtr, Int32 inputLength)
+   at System.Convert.FromBase64String(String s)
+   at v2rayN.Utils.Base64Decode(String plainText)
+2026-02-26 13:46:38.7481-INFO MyAppExit Begin
+2026-02-26 13:46:38.7895-INFO MyAppExit End
+2026-02-26 13:46:38.7895-INFO OnExit
+2026-02-26 13:46:43.6788-INFO v2rayN start up | v2rayN - V6.55 - 2024/08/05 | C:\Users\Jayzee\Desktop\v2rayN-With-Core-6.5.5\v2rayN.exe
+2026-02-26 13:46:43.6882-INFO Microsoft Windows NT 10.0.26200.0 - 64
+2026-02-26 13:47:01.9297-DEBUG Base64Decode,The input is not a valid Base-64 string as it contains a non-base 64 character, more than two padding characters, or an illegal character among the padding characters.
+2026-02-26 13:47:01.9297-DEBUG    at System.Convert.FromBase64_ComputeResultLength(Char* inputPtr, Int32 inputLength)
+   at System.Convert.FromBase64CharPtr(Char* inputPtr, Int32 inputLength)
+   at System.Convert.FromBase64String(String s)
+   at v2rayN.Utils.Base64Decode(String plainText)
+2026-02-26 13:47:27.0134-INFO MyAppExit Begin
+2026-02-26 13:47:27.1237-INFO MyAppExit End
+2026-02-26 13:47:27.1421-INFO OnExit
+2026-02-26 13:47:51.2413-INFO v2rayN start up | v2rayN - V6.55 - 2024/08/05 | C:\Users\Jayzee\Desktop\v2rayN-With-Core-6.5.5\v2rayN.exe
+2026-02-26 13:47:51.2508-INFO Microsoft Windows NT 10.0.26200.0 - 64
+2026-02-26 13:48:04.0057-DEBUG Base64Decode,The input is not a valid Base-64 string as it contains a non-base 64 character, more than two padding characters, or an illegal character among the padding characters.
+2026-02-26 13:48:04.0057-DEBUG    at System.Convert.FromBase64_ComputeResultLength(Char* inputPtr, Int32 inputLength)
+   at System.Convert.FromBase64CharPtr(Char* inputPtr, Int32 inputLength)
+   at System.Convert.FromBase64String(String s)
+   at v2rayN.Utils.Base64Decode(String plainText)
+2026-02-26 13:48:08.8117-DEBUG Base64Decode,The input is not a valid Base-64 string as it contains a non-base 64 character, more than two padding characters, or an illegal character among the padding characters.
+2026-02-26 13:48:08.8117-DEBUG    at System.Convert.FromBase64_ComputeResultLength(Char* inputPtr, Int32 inputLength)
+   at System.Convert.FromBase64CharPtr(Char* inputPtr, Int32 inputLength)
+   at System.Convert.FromBase64String(String s)
+   at v2rayN.Utils.Base64Decode(String plainText)
+2026-02-26 13:48:16.5424-DEBUG Base64Decode,The input is not a valid Base-64 string as it contains a non-base 64 character, more than two padding characters, or an illegal character among the padding characters.
+2026-02-26 13:48:16.5424-DEBUG    at System.Convert.FromBase64_ComputeResultLength(Char* inputPtr, Int32 inputLength)
+   at System.Convert.FromBase64CharPtr(Char* inputPtr, Int32 inputLength)
+   at System.Convert.FromBase64String(String s)
+   at v2rayN.Utils.Base64Decode(String plainText)
+2026-02-26 13:48:25.3102-DEBUG Base64Decode,The input is not a valid Base-64 string as it contains a non-base 64 character, more than two padding characters, or an illegal character among the padding characters.
+2026-02-26 13:48:25.3102-DEBUG    at System.Convert.FromBase64_ComputeResultLength(Char* inputPtr, Int32 inputLength)
+   at System.Convert.FromBase64CharPtr(Char* inputPtr, Int32 inputLength)
+   at System.Convert.FromBase64String(String s)
+   at v2rayN.Utils.Base64Decode(String plainText)
+2026-02-26 13:48:51.7455-INFO UpdateTaskRunSubscription
+2026-02-26 13:49:51.7451-INFO UpdateTaskRunGeo
+2026-02-26 13:50:25.3863-INFO MyAppExit Begin
+2026-02-26 13:50:25.4791-INFO MyAppExit End
+2026-02-26 13:50:25.4842-INFO OnExit
+2026-02-26 13:50:31.1844-INFO v2rayN start up | v2rayN - V6.55 - 2024/08/05 | C:\Users\Jayzee\Desktop\v2rayN-With-Core-6.5.5\v2rayN.exe
+2026-02-26 13:50:31.1939-INFO Microsoft Windows NT 10.0.26200.0 - 64
+2026-02-26 13:51:31.7516-INFO UpdateTaskRunSubscription
+2026-02-26 13:52:31.7397-INFO UpdateTaskRunGeo
+2026-02-26 16:03:40.6600-INFO MyAppExit Begin
+2026-02-26 16:03:40.7018-INFO MyAppExit End
+2026-02-26 16:03:40.7376-INFO OnExit
+2026-02-26 16:03:41.2586-INFO v2rayN start up | v2rayN - V6.55 - 2024/08/05 | C:\Users\Jayzee\Desktop\v2rayN-With-Core-6.5.5\v2rayN.exe
+2026-02-26 16:03:41.2680-INFO Microsoft Windows NT 10.0.26200.0 - 64
+2026-02-26 16:04:41.7610-INFO UpdateTaskRunSubscription
+2026-02-26 16:05:41.7487-INFO UpdateTaskRunGeo

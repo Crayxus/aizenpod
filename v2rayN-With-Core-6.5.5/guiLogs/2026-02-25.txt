@@ -1,0 +1,12 @@
+2026-02-25 09:54:03.1971-INFO v2rayN start up | v2rayN - V6.55 - 2024/08/05 | C:\Users\Jayzee\Desktop\v2rayN-With-Core-6.5.5\v2rayN.exe
+2026-02-25 09:54:03.2080-INFO Microsoft Windows NT 10.0.26200.0 - 64
+2026-02-25 09:55:03.7688-INFO UpdateTaskRunSubscription
+2026-02-25 09:56:03.7660-INFO UpdateTaskRunGeo
+2026-02-25 11:03:46.1899-INFO Current_SessionEnding
+2026-02-25 11:03:46.1899-INFO MyAppExit Begin
+2026-02-25 11:03:46.3857-INFO MyAppExit End
+2026-02-25 11:03:46.5110-INFO OnExit
+2026-02-25 11:17:45.3565-INFO v2rayN start up | v2rayN - V6.55 - 2024/08/05 | C:\Users\Jayzee\Desktop\v2rayN-With-Core-6.5.5\v2rayN.exe
+2026-02-25 11:17:45.3674-INFO Microsoft Windows NT 10.0.26200.0 - 64
+2026-02-25 11:18:45.9659-INFO UpdateTaskRunSubscription
+2026-02-25 11:19:45.9597-INFO UpdateTaskRunGeo
