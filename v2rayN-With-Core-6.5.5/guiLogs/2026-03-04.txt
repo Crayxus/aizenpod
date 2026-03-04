@@ -1,0 +1,22 @@
+2026-03-04 14:16:00.6841-INFO MyAppExit Begin
+2026-03-04 14:16:00.7802-INFO MyAppExit End
+2026-03-04 14:16:00.8124-INFO OnExit
+2026-03-04 14:21:40.2006-INFO v2rayN start up | v2rayN - V6.55 - 2024/08/05 | C:\Users\Jayzee\Desktop\v2rayN-With-Core-6.5.5\v2rayN.exe
+2026-03-04 14:21:40.2113-INFO Microsoft Windows NT 10.0.26200.0 - 64
+2026-03-04 14:22:41.3804-INFO UpdateTaskRunSubscription
+2026-03-04 14:23:41.3791-INFO UpdateTaskRunGeo
+2026-03-04 14:36:15.7512-DEBUG Base64Decode,The input is not a valid Base-64 string as it contains a non-base 64 character, more than two padding characters, or an illegal character among the padding characters.
+2026-03-04 14:36:15.7512-DEBUG    at System.Convert.FromBase64CharPtr(Char* inputPtr, Int32 inputLength)
+   at System.Convert.FromBase64String(String s)
+   at v2rayN.Utils.Base64Decode(String plainText)
+2026-03-04 14:38:18.6690-DEBUG Base64Decode,The input is not a valid Base-64 string as it contains a non-base 64 character, more than two padding characters, or an illegal character among the padding characters.
+2026-03-04 14:38:18.6690-DEBUG    at System.Convert.FromBase64CharPtr(Char* inputPtr, Int32 inputLength)
+   at System.Convert.FromBase64String(String s)
+   at v2rayN.Utils.Base64Decode(String plainText)
+2026-03-04 14:38:21.1913-DEBUG Base64Decode,The input is not a valid Base-64 string as it contains a non-base 64 character, more than two padding characters, or an illegal character among the padding characters.
+2026-03-04 14:38:21.1913-DEBUG    at System.Convert.FromBase64CharPtr(Char* inputPtr, Int32 inputLength)
+   at System.Convert.FromBase64String(String s)
+   at v2rayN.Utils.Base64Decode(String plainText)
+2026-03-04 14:39:12.3445-INFO MyAppExit Begin
+2026-03-04 14:39:12.3988-INFO MyAppExit End
+2026-03-04 14:39:12.3988-INFO OnExit
